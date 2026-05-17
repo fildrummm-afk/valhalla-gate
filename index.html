@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Врата Вальхаллы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --cell:  34px;
+  --gap:   2px;
+  --step:  36px;
+  --pad:   5px;
+
+  /* parchment */
+  --parch:      #f2e4c0;
+  --parch-dark: #e0cc98;
+  --parch-white:#ffffffcc;
+
+  /* wood */
+  --wood-border: #8b5e28;
+  --wood-frame:  #9a6820;
+  --wood-dark:   #7a4018;
+
+  /* gold */
+  --gold:       #b87c14;
+  --gold-lite:  #d4a020;
+  --gold-text:  #6e4008;
+
+  /* ink */
+  --ink:     #2e1a06;
+  --ink-mid: #5c3a14;
+  --ink-dim: #8c6030;
+
+  /* water */
+  --water:      #2d7cb5;
+  --water-lt:   #4a9ad0;
+  --water-dk:   #1e5c8a;
+
+  /* player ship — warm honey */
+  --ps-top:    #e8c050;
+  --ps-bot:    #a87828;
+  --ps-line:   #7a5010;
+
+  /* enemy ship — war crimson (shown at game end) */
+  --es-top:    #c84830;
+  --es-bot:    #7a2010;
+  --es-line:   #4a1008;
+
+  /* hit */
+  --hit-c: #f03810;
+  --hit-e: #980e00;
+
+  /* miss */
+  --miss-f:  #a0c0d8;
+  --miss-r:  #6090b0;
+
+  /* sunk */
+  --sunk-f: #5a2408;
+  --sunk-b: #8a3c10;
+
+  /* btn */
+  --btn-top:    #d4a84a;
+  --btn-bot:    #9a6820;
+  --btn-border: #7a4e14;
+  --btn-text:   #3e1e04;
+}
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  background-color: var(--parch);
+  background-image:
+    repeating-linear-gradient(0deg,  transparent, transparent 28px, rgba(160,100,20,.07) 28px, rgba(160,100,20,.07) 29px),
+    repeating-linear-gradient(90deg, transparent, transparent 70px, rgba(160,100,20,.04) 70px, rgba(160,100,20,.04) 73px);
+  min-height: 100vh;
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+#app { max-width: 480px; margin: 0 auto; padding: 10px 8px 24px; }
+
+/* ── HEADER ── */
+.hdr { text-align: center; padding: 10px 0 8px; border-bottom: 2.5px solid var(--gold); margin-bottom: 10px; }
+.hdr-runes { display: block; font-size: 11px; color: var(--gold-lite); letter-spacing: 4px; opacity: .65; }
+.hdr h1    { font-size: 20px; font-weight: 700; letter-spacing: 3px; color: var(--gold-text); margin: 3px 0 2px; }
+.hdr p     { font-size: 10px; color: var(--ink-dim); letter-spacing: 1.5px; }
+
+/* ── STATUS ── */
+.status {
+  background: var(--parch-white);
+  border: 1.5px solid var(--wood-border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  text-align: center; font-size: 13px; font-weight: 600;
+  color: var(--ink); margin-bottom: 10px; min-height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 1px 3px rgba(100,60,10,.1);
+}
+
+/* ── ORIENT ── */
+.orient-row { display: flex; gap: 6px; justify-content: center; align-items: center; margin-bottom: 8px; }
+.orient-lbl { font-size: 11px; color: var(--ink-dim); letter-spacing: 1px; }
+.orient-btn {
+  padding: 5px 12px; border-radius: 5px; border: 1.5px solid var(--wood-border);
+  background: linear-gradient(180deg, var(--parch) 0%, var(--parch-dark) 100%);
+  font-size: 12px; font-family: Georgia, serif; color: var(--ink-mid); cursor: pointer;
+}
+.orient-btn.active {
+  background: linear-gradient(180deg, var(--wood-frame) 0%, var(--wood-dark) 100%);
+  border-color: var(--gold); color: var(--parch);
+}
+
+/* ── SHIP BUTTONS ── */
+.ships-row { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+.ship-btn {
+  padding: 4px 10px; border-radius: 5px; border: 1.5px solid var(--wood-border);
+  background: linear-gradient(180deg, var(--parch) 0%, var(--parch-dark) 100%);
+  font-size: 11px; font-family: Georgia, serif; color: var(--ink-mid); cursor: pointer; transition: all .12s;
+}
+.ship-btn.selected {
+  background: linear-gradient(180deg, var(--wood-frame) 0%, var(--wood-dark) 100%);
+  border-color: var(--gold); color: var(--parch);
+}
+.ship-btn.placed { opacity: .4; text-decoration: line-through; cursor: default; }
+
+/* ── BOARDS ── */
+.boards-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.board-wrap  { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.board-lbl   { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--gold-text); }
+
+/* ── GRID FRAME ── */
+.grid-frame {
+  padding: var(--pad);
+  background: linear-gradient(135deg, #c89040 0%, #9a6220 50%, #b07828 100%);
+  border: 2.5px solid var(--wood-dark); border-radius: 7px;
+  box-shadow: 0 3px 10px rgba(80,40,0,.3), inset 0 0 8px rgba(0,0,0,.15);
+  position: relative;
+}
+.grid-frame::after {
+  content: ''; position: absolute; inset: 3px;
+  border: 1px solid rgba(255,220,100,.18); border-radius: 3px; pointer-events: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(10, var(--cell));
+  grid-template-rows:    repeat(10, var(--cell));
+  gap: var(--gap); position: relative;
+}
+
+/* ── CELLS ── */
+.cell {
+  width: var(--cell); height: var(--cell); border-radius: 2px;
+  background: var(--water); border: .5px solid var(--water-dk);
+  cursor: pointer; position: relative; overflow: visible; transition: background .1s;
+}
+.cell::before {
+  content: ''; position: absolute; inset: 0; border-radius: 2px; pointer-events: none;
+  background-image: repeating-linear-gradient(130deg, transparent, transparent 6px, rgba(255,255,255,.05) 6px, rgba(255,255,255,.05) 7px);
+}
+
+/* PLAYER SHIP — honey amber */
+.cell.ship-p {
+  background: linear-gradient(180deg, var(--ps-top) 0%, var(--ps-bot) 100%);
+  border: .5px solid var(--ps-line);
+}
+.cell.ship-p::before {
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(0,0,0,.1) 8px, rgba(0,0,0,.1) 9px);
+}
+
+/* ENEMY SHIP revealed — war crimson */
+.cell.ship-e {
+  background: linear-gradient(180deg, var(--es-top) 0%, var(--es-bot) 100%);
+  border: .5px solid var(--es-line);
+}
+.cell.ship-e::before {
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(0,0,0,.12) 8px, rgba(0,0,0,.12) 9px);
+}
+
+/* HIT */
+.cell.hit {
+  background: radial-gradient(circle at 45% 55%, var(--hit-c), var(--hit-e) 80%);
+  border: .5px solid #c02808; cursor: default;
+}
+.cell.hit::before { display: none; }
+
+/* MISS */
+.cell.miss { background: var(--miss-f); border: .5px solid var(--miss-r); cursor: default; }
+
+/* SUNK */
+.cell.sunk { background: var(--sunk-f); border: .5px solid var(--sunk-b); cursor: default; }
+.cell.sunk::before { display: none; }
+
+/* hover */
+.cell.ec:not(.hit):not(.miss):not(.sunk):hover { background: var(--water-lt); border-color: var(--gold-lite); cursor: crosshair; }
+.cell.ec:not(.hit):not(.miss):not(.sunk):active { background: #5aaad4; }
+
+/* preview */
+.cell.pok  { background: rgba(70,200,50,.38) !important; border-color: #38a018 !important; }
+.cell.pbad { background: rgba(220,40,20,.32) !important; border-color: #c02818 !important; }
+
+/* ── HIT FLASH ANIMATION ── */
+@keyframes hit-flash {
+  0%   { opacity: 1; background: #ffffff; transform: scale(1.35); border-radius: 4px; }
+  18%  { background: #ffe060; transform: scale(1.18); }
+  45%  { background: #ff7020; transform: scale(1.06); }
+  100% { opacity: 0; background: #ff2200; transform: scale(1); border-radius: 2px; }
+}
+.hit-flash {
+  position: absolute; border-radius: 2px; z-index: 30; pointer-events: none;
+  animation: hit-flash 0.55s cubic-bezier(.2,.8,.4,1) forwards;
+}
+
+/* ── SUNK FLASH ── */
+@keyframes sunk-flash {
+  0%   { opacity: 1; background: #ffffff; transform: scale(1.4); border-radius: 4px; }
+  10%  { background: #ffee60; transform: scale(1.25); }
+  30%  { background: #ff8020; transform: scale(1.15); }
+  60%  { background: #cc2000; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1); }
+}
+.sunk-flash {
+  position: absolute; border-radius: 2px; z-index: 30; pointer-events: none;
+  animation: sunk-flash 0.75s ease-out forwards;
+}
+
+/* ── MARKERS ── */
+.flame-wrap  { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 2; }
+.splash-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 2; }
+
+/* ── DRAKKAR OVERLAY ── */
+.drakkar-ov { position: absolute; pointer-events: none; z-index: 10; }
+.drakkar-ov svg { width: 100%; height: 100%; display: block; }
+
+/* ── SCORES ── */
+.scores { display: flex; gap: 8px; justify-content: center; margin-bottom: 8px; }
+.score-card {
+  background: var(--parch-white); border: 1.5px solid var(--wood-border); border-radius: 6px;
+  padding: 6px 18px; text-align: center; min-width: 90px;
+  box-shadow: inset 0 1px 3px rgba(100,60,10,.08);
+}
+.score-num { font-size: 22px; font-weight: 700; color: var(--gold-text); }
+.score-lbl { font-size: 9px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 1px; }
+
+/* ── LEGEND ── */
+.legend { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
+.leg-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--ink-mid); }
+.leg-box  { width: 12px; height: 12px; border-radius: 2px; border: .5px solid rgba(0,0,0,.15); }
+
+/* ── FLEET STATUS ── */
+.fleet-status { display: flex; gap: 8px; justify-content: center; margin-bottom: 8px; flex-wrap: wrap; }
+.fs-panel {
+  background: var(--parch-white);
+  border: 1.5px solid var(--wood-border); border-radius: 6px;
+  padding: 6px 10px; min-width: 130px;
+  box-shadow: inset 0 1px 3px rgba(100,60,10,.08);
+}
+.fs-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--gold-text);
+  margin-bottom: 5px; text-align: center;
+  border-bottom: 1px solid var(--parch-dark); padding-bottom: 3px;
+}
+.fs-ships { display: flex; flex-direction: column; gap: 3px; }
+.fs-row   { display: flex; align-items: center; gap: 2px; }
+.fs-row.dead-row { opacity: .38; }
+.fsc {
+  width: 11px; height: 11px; border-radius: 1px;
+  border: .5px solid rgba(0,0,0,.18);
+  transition: opacity .3s;
+}
+.fsc.alive-p { background: linear-gradient(180deg, #e8c050 0%, #a87828 100%); }
+.fsc.alive-e { background: linear-gradient(180deg, #6a9ec0 0%, #3a6a8a 100%); }
+.fsc.dead    { background: #888; }
+.fs-name {
+  font-size: 9px; color: var(--ink-dim); margin-left: 4px;
+  font-family: Georgia, serif; white-space: nowrap;
+}
+.fs-row.dead-row .fs-name { text-decoration: line-through; }
+
+/* ── STATUS SHAKE (error) ── */
+@keyframes status-shake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-5px); }
+  40%      { transform: translateX(5px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+.status.shake { animation: status-shake 0.35s ease; }
+
+/* ── BUTTONS ── */
+.actions { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+.btn {
+  padding: 8px 16px; border-radius: 6px; border: 1.5px solid var(--btn-border);
+  background: linear-gradient(180deg, var(--btn-top) 0%, var(--btn-bot) 100%);
+  font-size: 12px; font-family: Georgia, serif; font-weight: 700; letter-spacing: .5px;
+  color: var(--btn-text); cursor: pointer;
+  box-shadow: 0 2px 4px rgba(80,40,0,.2), inset 0 1px 0 rgba(255,240,180,.3); transition: all .1s;
+}
+.btn:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(80,40,0,.2); }
+.btn.primary {
+  border-color: var(--gold); color: var(--ink);
+  background: linear-gradient(180deg, #e8c050 0%, #b87c14 100%);
+  box-shadow: 0 2px 8px rgba(180,120,20,.3), inset 0 1px 0 rgba(255,240,120,.4);
+}
+
+@media (max-width: 370px) { :root { --cell: 29px; --step: 31px; } }
+@media (max-width: 330px) { :root { --cell: 26px; --step: 28px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hdr">
+    <span class="hdr-runes">ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ</span>
+    <h1>⚔ ВРАТА ВАЛЬХАЛЛЫ ⚔</h1>
+    <p>VALHALLA'S GATE — МОРСКОЙ БОЙ ВИКИНГОВ</p>
+    <span class="hdr-runes">ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ</span>
+  </div>
+
+  <div class="status" id="status">Выбери корабль и расставь свой флот</div>
+
+  <div id="phase-place">
+    <div class="orient-row">
+      <span class="orient-lbl">КУРС:</span>
+      <button class="orient-btn active" id="btn-h" onclick="setOrient('h')">⟶ Горизонталь</button>
+      <button class="orient-btn"        id="btn-v" onclick="setOrient('v')">↓ Вертикаль</button>
+    </div>
+    <div class="ships-row" id="ship-list"></div>
+    <div class="boards-row">
+      <div class="board-wrap">
+        <div class="board-lbl">⚓ Твой флот</div>
+        <div class="grid-frame"><div class="grid" id="player-grid"></div></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn"         onclick="autoPlace()">Авторасстановка</button>
+      <button class="btn"         onclick="clearBoard()">Очистить</button>
+      <button class="btn primary" id="start-btn" onclick="startGame()" style="display:none;">⚔ В БИТВУ!</button>
+    </div>
+  </div>
+
+  <div id="phase-battle" style="display:none;">
+    <div class="legend">
+      <div class="leg-item"><div class="leg-box" style="background:linear-gradient(180deg,#e8c050,#a87828);"></div>Твои корабли</div>
+      <div class="leg-item"><div class="leg-box" style="background:linear-gradient(180deg,#c84830,#7a2010);"></div>Вражеские</div>
+      <div class="leg-item"><div class="leg-box" style="background:radial-gradient(circle,#f03810,#980e00);"></div>Огонь</div>
+      <div class="leg-item"><div class="leg-box" style="background:#5a2408;border-color:#8a3c10;"></div>Потоплен</div>
+      <div class="leg-item"><div class="leg-box" style="background:#a0c0d8;border-color:#6090b0;"></div>Промах</div>
+    </div>
+    <div class="scores">
+      <div class="score-card"><div class="score-num" id="p-hits">0</div><div class="score-lbl">Уничтожено</div></div>
+      <div class="score-card"><div class="score-num" id="e-hits">0</div><div class="score-lbl">Враг попал</div></div>
+    </div>
+    <div class="fleet-status" id="fleet-status"></div>
+    <div class="boards-row">
+      <div class="board-wrap">
+        <div class="board-lbl">⚔ Вражеский флот</div>
+        <div class="grid-frame"><div class="grid" id="enemy-grid"></div></div>
+      </div>
+      <div class="board-wrap">
+        <div class="board-lbl">⚓ Твой флот</div>
+        <div class="grid-frame"><div class="grid" id="player-grid2"></div></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="resetGame()">↺ Новая игра</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Telegram ── */
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+function haptic(t, v) {
+  try { t === 'impact' ? tg.HapticFeedback.impactOccurred(v) : tg.HapticFeedback.notificationOccurred(v); } catch(e) {}
+}
+
+/* ══════════════════════════════════
+   AUDIO — Web Audio API
+══════════════════════════════════ */
+function playSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    if (type === 'hit' || type === 'sunk') {
+      const dur  = type === 'sunk' ? 0.55 : 0.32;
+      const vol  = type === 'sunk' ? 1.1  : 0.75;
+      const freq = type === 'sunk' ? 220  : 340;
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+      const d   = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 1.4);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=1.5;
+      lp.frequency.setValueAtTime(freq*2, now);
+      lp.frequency.exponentialRampToValueAtTime(freq*0.25, now+dur);
+      const osc = ctx.createOscillator(); osc.type='sine';
+      osc.frequency.setValueAtTime(120,now); osc.frequency.exponentialRampToValueAtTime(30,now+0.08);
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(0.5,now); og.gain.exponentialRampToValueAtTime(0.001,now+0.1);
+      osc.connect(og); og.connect(ctx.destination); osc.start(now); osc.stop(now+0.12);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(vol,now); g.gain.exponentialRampToValueAtTime(0.001,now+dur);
+      src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start(now);
+      setTimeout(()=>{ try{ctx.close()}catch(e){} }, (dur+0.2)*1000);
+
+    } else if (type === 'miss') {
+      const dur = 0.22;
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate*dur), ctx.sampleRate);
+      const d   = buf.getChannelData(0);
+      for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,0.65);
+      const src = ctx.createBufferSource(); src.buffer=buf;
+      const bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=900; bp.Q.value=0.7;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.22,now); g.gain.exponentialRampToValueAtTime(0.001,now+dur);
+      src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(now);
+      setTimeout(()=>{ try{ctx.close()}catch(e){} }, 350);
+    }
+  } catch(e) {}
+}
+
+/* ── Error blip: soft denied thud ── */
+function playErrorBlip() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(70, now + 0.18);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.18, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(now); osc.stop(now + 0.2);
+    setTimeout(()=>{ try{ctx.close()}catch(e){} }, 300);
+  } catch(e) {}
+}
+
+/* ── Victory fanfare: Viking war horn ascending ── */
+function playVictoryFanfare() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    function horn(freq, start, dur, vol) {
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+      o1.type = 'sawtooth'; o1.frequency.value = freq;
+      o2.type = 'sawtooth'; o2.frequency.value = freq * 0.5; /* octave below */
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = freq * 3.5; lp.Q.value = 0.8;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, start);
+      g.gain.linearRampToValueAtTime(vol, start + 0.05);
+      g.gain.setValueAtTime(vol * 0.85, start + dur - 0.08);
+      g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(ctx.destination);
+      o1.start(start); o1.stop(start+dur);
+      o2.start(start); o2.stop(start+dur);
+    }
+
+    /* D–G–A–D ascending, then sustained chord */
+    const D4=293.66, G4=392, A4=440, D5=587.33, G5=784;
+    horn(D4, now,        0.28, 0.28);
+    horn(G4, now+0.24,   0.28, 0.30);
+    horn(A4, now+0.48,   0.28, 0.30);
+    horn(D5, now+0.72,   1.6,  0.34);  /* sustained high note */
+    horn(G4, now+0.72,   1.6,  0.18);  /* harmony */
+    horn(D4, now+0.72,   1.6,  0.14);  /* bass */
+    horn(G5, now+1.1,    1.0,  0.12);  /* bright high overtone */
+
+    setTimeout(()=>{ try{ctx.close()}catch(e){} }, 3000);
+  } catch(e) {}
+}
+
+/* ══════════════════════════════════
+   HIT FLASH
+══════════════════════════════════ */
+function showFlash(gridEl, r, c, type) {
+  const step = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell')) + 2;
+  const pad  = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--pad')) || 5;
+  const el = document.createElement('div');
+  el.className = type === 'sunk' ? 'sunk-flash' : 'hit-flash';
+  el.style.cssText = `left:${c * step + pad}px; top:${r * step + pad}px; width:${step - 2}px; height:${step - 2}px;`;
+  /* append to grid-frame (position:relative parent) */
+  gridEl.parentElement.appendChild(el);
+  const dur = type === 'sunk' ? 800 : 600;
+  setTimeout(() => { try { el.remove(); } catch(e) {} }, dur);
+}
+
+/* ══════════════════════════════════
+   SVG MARKERS
+══════════════════════════════════ */
+function flameSVG() {
+  return `<div class="flame-wrap"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 24" width="20" height="24">
+    <defs><linearGradient id="fg${Math.random().toString(36).slice(2,5)}" x1="0" y1="0" x2="0" y2="1" id="fg">
+      <stop offset="0%" stop-color="#ff8800"/><stop offset="100%" stop-color="#cc1100"/>
+    </linearGradient></defs>
+    <path d="M10,2C10,2 14,7 13,11C16,8 15,4 15,4C18,8 18,14 15,18C17,16 17,19 16,21C14,23 11,24 9,23C6,22 4,19 5,16C3,18 4,20 4,20C1,16 2,10 5,7C4,10 6,12 6,12C5,8 8,4 10,2Z" fill="url(#fg)"/>
+    <path d="M10,12C10,12 12,15 11,18C13,16 12,12 12,12C14,14 13,18 11,20C9,21 7,19 8,17C7,18 8,20 8,20C6,17 7,14 10,12Z" fill="#ffdd44" opacity=".75"/>
+  </svg></div>`;
+}
+
+function splashSVG() {
+  return `<div class="splash-wrap"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="18" height="18">
+    <circle cx="10" cy="10" r="3.5" fill="none" stroke="#5a9ec0" stroke-width="1.5"/>
+    <circle cx="10" cy="10" r="6.5" fill="none" stroke="#5a9ec0" stroke-width=".8" opacity=".45"/>
+    <circle cx="10" cy="10" r="1.5" fill="#80c0d8" opacity=".7"/>
+  </svg></div>`;
+}
+
+/* ── DRAKKAR OVERLAY ── */
+function addDrakkar(gridEl, ship) {
+  const step = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell')) + 2;
+  const pad  = 5;
+  const r0 = ship.cells[0][0], c0 = ship.cells[0][1];
+  const el = document.createElement('div');
+  el.className = 'drakkar-ov';
+
+  const pw = ship.size * step - 2, ph = step - 2;
+
+  if (ship.dir === 'h') {
+    el.style.cssText = `left:${c0*step+pad}px;top:${r0*step+pad}px;width:${pw}px;height:${ph}px;`;
+  } else {
+    el.style.cssText = `left:${c0*step+pad}px;top:${r0*step+pad}px;width:${ship.size*step-2}px;height:${step-2}px;transform-origin:0 0;transform:rotate(90deg) translateY(-${step-2}px);`;
+    el.style.width  = ph + 'px';
+    el.style.height = pw + 'px';
+    el.style.transformOrigin = '0 0';
+    el.style.transform = `rotate(90deg) translateY(-${ph}px)`;
+    /* after rotation, reposition */
+    el.style.left = (c0*step+pad) + 'px';
+    el.style.top  = (r0*step+pad) + 'px';
+  }
+
+  el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 34" preserveAspectRatio="none"
+      style="filter:drop-shadow(0 0 4px rgba(200,50,0,.6))">
+    <defs>
+      <linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#8b4a14"/><stop offset="100%" stop-color="#4a2008"/>
+      </linearGradient>
+    </defs>
+    <path d="M6,20 Q12,29 24,29 L76,29 Q88,29 94,20 L88,16 Q68,21 50,21 Q32,21 12,16 Z"
+          fill="url(#hg)" stroke="#3a1604" stroke-width=".7"/>
+    <path d="M94,20 C99,16 102,12 99,9 C97,7 95,9 94,12 C96,10 97,8 95,7 C93,6 91,8 92,12 L88,16 Z"
+          fill="#8b4a14" stroke="#3a1604" stroke-width=".6"/>
+    <circle cx="97.5" cy="9" r="1.3" fill="#e03a00"/>
+    <path d="M6,20 C1,16 -1,12 2,9 C4,7 6,10 7,13 L12,16 Z"
+          fill="#8b4a14" stroke="#3a1604" stroke-width=".6"/>
+    <line x1="50" y1="29" x2="50" y2="3" stroke="#3a1604" stroke-width="1.8"/>
+    <path d="M50,4 L50,21 L65,17 L65,6 Z" fill="#7a1800" opacity=".8" stroke="#4a0c00" stroke-width=".5"/>
+    <line x1="52" y1="8"  x2="62" y2="8"  stroke="#c03000" stroke-width=".6" opacity=".5"/>
+    <line x1="51" y1="13" x2="63" y2="13" stroke="#c03000" stroke-width=".6" opacity=".5"/>
+    <circle cx="27" cy="23" r="3.2" fill="#4a2008" stroke="#7a4010" stroke-width=".7"/>
+    <circle cx="39" cy="23" r="3.2" fill="#4a2008" stroke="#7a4010" stroke-width=".7"/>
+    <circle cx="61" cy="23" r="3.2" fill="#4a2008" stroke="#7a4010" stroke-width=".7"/>
+    <circle cx="73" cy="23" r="3.2" fill="#4a2008" stroke="#7a4010" stroke-width=".7"/>
+    <line x1="27" y1="26" x2="24" y2="32" stroke="#3a1604" stroke-width="1.2"/>
+    <line x1="39" y1="26" x2="36" y2="32" stroke="#3a1604" stroke-width="1.2"/>
+    <line x1="61" y1="26" x2="58" y2="32" stroke="#3a1604" stroke-width="1.2"/>
+    <line x1="73" y1="26" x2="70" y2="32" stroke="#3a1604" stroke-width="1.2"/>
+    <path d="M47,3 C46,1 48,-1 47,-1 M50,2 C49,0 51,-1 50,-2 M53,3 C52,1 54,-1 53,-1"
+          stroke="#cc4400" stroke-width="1.1" fill="none" opacity=".5"/>
+  </svg>`;
+  gridEl.appendChild(el);
+}
+
+/* ══════════════════════════════════
+   BOARD HELPERS
+══════════════════════════════════ */
+function initBoard() { return Array.from({ length: 10 }, () => Array(10).fill(0)); }
+
+function getShipCells(r, c, size, dir) {
+  const cells = [];
+  for (let i = 0; i < size; i++) {
+    const rr = dir === 'v' ? r + i : r;
+    const cc = dir === 'h' ? c + i : c;
+    if (rr < 0 || rr >= 10 || cc < 0 || cc >= 10) return null;
+    cells.push([rr, cc]);
+  }
+  return cells;
+}
+
+function canPlace(board, r, c, size, dir) {
+  const cells = getShipCells(r, c, size, dir);
+  if (!cells) return false;
+  for (const [rr, cc] of cells)
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const nr = rr + dr, nc = cc + dc;
+      if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && board[nr][nc] !== 0) return false;
+    }
+  return true;
+}
+
+function placeShipOn(board, ships, r, c, size, dir, id) {
+  const cells = getShipCells(r, c, size, dir);
+  if (!cells) return null;
+  cells.forEach(([rr, cc]) => { board[rr][cc] = id; });
+  const ship = { id, cells, dir, size, sunk: false };
+  ships.push(ship);
+  return ship;
+}
+
+function markAround(board, cells) {
+  cells.forEach(([r, c]) => {
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && board[nr][nc] === 0) board[nr][nc] = 'miss';
+    }
+  });
+}
+
+function randomUntargeted(board) {
+  const cells = [];
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
+    const v = board[r][c];
+    if (v !== 'hit' && v !== 'miss' && v !== 'sunk') cells.push([r, c]);
+  }
+  return cells.length ? cells[Math.floor(Math.random() * cells.length)] : null;
+}
+
+/* ══════════════════════════════════
+   STATE
+══════════════════════════════════ */
+const SHIPS = [
+  { name: 'Флагман', size: 4, count: 1 },
+  { name: 'Драккар', size: 3, count: 2 },
+  { name: 'Ладья',   size: 2, count: 3 },
+  { name: 'Лодка',   size: 1, count: 4 }
+];
+
+let orient = 'h', selectedShip = null;
+let playerBoard = [], enemyBoard = [];
+let playerShips = [], enemyShips = [];
+let shipsToPlace = [];
+let playerHits = 0, enemyHits = 0;
+let gamePhase = 'place', myTurn = true;
+let aiHuntMode = false, aiTarget = [], aiHits = [];
+let totalEnemyCells = 0, totalPlayerCells = 0;
+
+/* ══════════════════════════════════
+   UI HELPERS
+══════════════════════════════════ */
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+function setOrient(o) {
+  orient = o;
+  document.getElementById('btn-h').className = 'orient-btn' + (o === 'h' ? ' active' : '');
+  document.getElementById('btn-v').className = 'orient-btn' + (o === 'v' ? ' active' : '');
+}
+
+function buildShipList() {
+  const el = document.getElementById('ship-list');
+  el.innerHTML = ''; shipsToPlace = [];
+  SHIPS.forEach(s => {
+    for (let i = 0; i < s.count; i++) {
+      const idx = shipsToPlace.length;
+      shipsToPlace.push({ ...s, idx, placed: false });
+      const btn = document.createElement('button');
+      btn.className = 'ship-btn'; btn.id = 'ss-' + idx;
+      btn.textContent = s.name + ' (' + s.size + ')';
+      btn.onclick = () => selectShip(idx);
+      el.appendChild(btn);
+    }
+  });
+}
+
+function selectShip(idx) {
+  if (shipsToPlace[idx].placed) return;
+  selectedShip = idx;
+  document.querySelectorAll('.ship-btn').forEach(b => b.classList.remove('selected'));
+  const el = document.getElementById('ss-' + idx);
+  if (el) el.classList.add('selected');
+  setStatus('Выбран: ' + shipsToPlace[idx].name + ' (' + shipsToPlace[idx].size + ' кл.) — нажми на поле');
+}
+
+/* ══════════════════════════════════
+   RENDER
+══════════════════════════════════ */
+function renderPlayerGrid(id) {
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  const isPlace = (id === 'player-grid');
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
+    const val  = playerBoard[r][c];
+    const cell = document.createElement('div');
+    if      (val === 'hit')  { cell.className = 'cell hit';  cell.innerHTML = flameSVG(); }
+    else if (val === 'miss') { cell.className = 'cell miss'; cell.innerHTML = splashSVG(); }
+    else if (val === 'sunk') { cell.className = 'cell sunk'; }
+    else if (typeof val === 'number' && val > 0) cell.className = 'cell ship-p';
+    else cell.className = 'cell';
+    if (isPlace) {
+      cell.addEventListener('click',      () => placeClick(r, c));
+      cell.addEventListener('mouseenter', () => previewPlace(r, c, true));
+      cell.addEventListener('mouseleave', () => previewPlace(r, c, false));
+    }
+    el.appendChild(cell);
+  }
+  if (id === 'player-grid2')
+    playerShips.filter(s => s.sunk).forEach(s => addDrakkar(el, s));
+}
+
+function renderEnemyGrid() {
+  const el = document.getElementById('enemy-grid');
+  el.innerHTML = '';
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
+    const val  = enemyBoard[r][c];
+    const cell = document.createElement('div');
+    if      (val === 'hit')     { cell.className = 'cell hit';    cell.innerHTML = flameSVG(); }
+    else if (val === 'miss')    { cell.className = 'cell miss';   cell.innerHTML = splashSVG(); }
+    else if (val === 'sunk')    { cell.className = 'cell sunk'; }
+    else if (val === 'reveal')  { cell.className = 'cell ship-e'; }
+    else {
+      cell.className = 'cell ec';
+      if (myTurn) cell.addEventListener('click', () => playerAttack(r, c));
+    }
+    el.appendChild(cell);
+  }
+  enemyShips.filter(s => s.sunk).forEach(s => addDrakkar(el, s));
+}
+
+/* ── Fleet status panel ── */
+const SHIP_NAMES = { 4: 'Флагман', 3: 'Драккар', 2: 'Ладья', 1: 'Лодка' };
+
+function renderFleetStatus() {
+  const el = document.getElementById('fleet-status');
+  if (!el) return;
+
+  function panelHTML(ships, isEnemy) {
+    const sorted = [...ships].sort((a, b) => b.size - a.size);
+    const rows = sorted.map(ship => {
+      const cls  = ship.sunk ? 'fsc dead' : (isEnemy ? 'fsc alive-e' : 'fsc alive-p');
+      const cells = Array.from({ length: ship.size }, () => `<div class="${cls}"></div>`).join('');
+      return `<div class="fs-row${ship.sunk ? ' dead-row' : ''}">
+        ${cells}<span class="fs-name">${SHIP_NAMES[ship.size] || ''}</span>
+      </div>`;
+    }).join('');
+    const icon = isEnemy ? '⚔' : '⚓';
+    return `<div class="fs-panel">
+      <div class="fs-title">${icon} ${isEnemy ? 'Враг' : 'Твой флот'}</div>
+      <div class="fs-ships">${rows}</div>
+    </div>`;
+  }
+
+  el.innerHTML = panelHTML(enemyShips, true) + panelHTML(playerShips, false);
+}
+
+function renderBattleGrids() {
+  renderEnemyGrid();
+  renderPlayerGrid('player-grid2');
+  renderFleetStatus();
+  document.getElementById('p-hits').textContent = playerHits;
+  document.getElementById('e-hits').textContent = enemyHits;
+}
+
+/* ── Preview placement ── */
+function previewPlace(r, c, show) {
+  if (selectedShip === null || shipsToPlace[selectedShip].placed) return;
+  const s = shipsToPlace[selectedShip];
+  const cells = getShipCells(r, c, s.size, orient);
+  if (!cells) return;
+  const valid = canPlace(playerBoard, r, c, s.size, orient);
+  const all   = document.getElementById('player-grid').querySelectorAll('.cell');
+  cells.forEach(([rr, cc]) => {
+    const cell = all[rr * 10 + cc];
+    if (cell) {
+      cell.classList.remove('pok', 'pbad');
+      if (show) cell.classList.add(valid ? 'pok' : 'pbad');
+    }
+  });
+}
+
+/* ══════════════════════════════════
+   PLACE PHASE
+══════════════════════════════════ */
+function placeClick(r, c) {
+  if (selectedShip === null || shipsToPlace[selectedShip].placed) { setStatus('Сначала выбери корабль!'); return; }
+  const s = shipsToPlace[selectedShip];
+  if (!canPlace(playerBoard, r, c, s.size, orient)) {
+    haptic('notification', 'error'); setStatus('Нельзя поставить здесь!'); return;
+  }
+  /* ✓ FIX: cells correctly stored in ship object via placeShipOn */
+  placeShipOn(playerBoard, playerShips, r, c, s.size, orient, selectedShip + 1);
+  shipsToPlace[selectedShip].placed = true;
+  document.getElementById('ss-' + selectedShip).className = 'ship-btn placed';
+  selectedShip = null;
+  haptic('impact', 'light');
+  renderPlayerGrid('player-grid');
+  const rem = shipsToPlace.filter(x => !x.placed);
+  if (!rem.length) { document.getElementById('start-btn').style.display = ''; setStatus('Все корабли расставлены! ⚔ В БИТВУ!'); }
+  else setStatus('Корабль поставлен. Выбери следующий.');
+}
+
+function autoPlace() {
+  clearBoard();
+  SHIPS.forEach(s => {
+    for (let i = 0; i < s.count; i++) {
+      let placed = false, tries = 0;
+      while (!placed && tries < 500) {
+        const r = Math.floor(Math.random() * 10), c = Math.floor(Math.random() * 10), d = Math.random() < .5 ? 'h' : 'v';
+        if (canPlace(playerBoard, r, c, s.size, d)) { placeShipOn(playerBoard, playerShips, r, c, s.size, d, playerShips.length + 1); placed = true; }
+        tries++;
+      }
+    }
+  });
+  shipsToPlace.forEach((_, i) => { shipsToPlace[i].placed = true; });
+  document.querySelectorAll('.ship-btn').forEach(b => b.className = 'ship-btn placed');
+  document.getElementById('start-btn').style.display = '';
+  renderPlayerGrid('player-grid');
+  setStatus('Флот расставлен! ⚔ В БИТВУ!');
+}
+
+function clearBoard() {
+  playerBoard = initBoard(); playerShips = []; selectedShip = null;
+  shipsToPlace.forEach((_, i) => { shipsToPlace[i].placed = false; });
+  document.querySelectorAll('.ship-btn').forEach(b => b.className = 'ship-btn');
+  document.getElementById('start-btn').style.display = 'none';
+  renderPlayerGrid('player-grid');
+  setStatus('Поле очищено. Выбери корабль.');
+}
+
+/* ══════════════════════════════════
+   BATTLE
+══════════════════════════════════ */
+function startGame() {
+  gamePhase = 'battle'; enemyBoard = initBoard(); enemyShips = [];
+  SHIPS.forEach(s => {
+    for (let i = 0; i < s.count; i++) {
+      let placed = false, tries = 0;
+      while (!placed && tries < 500) {
+        const r = Math.floor(Math.random() * 10), c = Math.floor(Math.random() * 10), d = Math.random() < .5 ? 'h' : 'v';
+        if (canPlace(enemyBoard, r, c, s.size, d)) { placeShipOn(enemyBoard, enemyShips, r, c, s.size, d, enemyShips.length + 1); placed = true; }
+        tries++;
+      }
+    }
+  });
+  totalEnemyCells  = enemyShips.reduce((a, s) => a + s.size, 0);
+  totalPlayerCells = playerShips.reduce((a, s) => a + s.size, 0);
+  playerHits = 0; enemyHits = 0; myTurn = true;
+  aiHuntMode = false; aiTarget = []; aiHits = [];
+  document.getElementById('phase-place').style.display = 'none';
+  document.getElementById('phase-battle').style.display = '';
+  renderBattleGrids();
+  setStatus('⚔ Твой ход! Атакуй вражеский флот!');
+}
+
+/* ── Player attacks ── */
+function playerAttack(r, c) {
+  if (!myTurn) {
+    playErrorBlip();
+    const el = document.getElementById('status');
+    el.classList.remove('shake');
+    void el.offsetWidth; /* reflow to restart animation */
+    el.classList.add('shake');
+    setTimeout(() => el.classList.remove('shake'), 400);
+    setStatus('⏳ Подожди — сейчас ход врага!');
+    return;
+  }
+  const val = enemyBoard[r][c];
+  if (['hit', 'miss', 'sunk', 'reveal'].includes(val)) { setStatus('Ты уже стрелял сюда!'); return; }
+
+  const gridEl = document.getElementById('enemy-grid');
+
+  if (typeof val === 'number' && val > 0) {
+    enemyBoard[r][c] = 'hit'; playerHits++;
+    const ship = enemyShips.find(s => s.cells.some(([rr, cc]) => rr === r && cc === c));
+
+    if (ship) {
+      const allHit = ship.cells.every(([rr, cc]) => ['hit', 'sunk'].includes(enemyBoard[rr][cc]));
+      if (allHit) {
+        ship.cells.forEach(([rr, cc]) => { enemyBoard[rr][cc] = 'sunk'; });
+        ship.sunk = true; markAround(enemyBoard, ship.cells);
+        playSound('sunk'); haptic('notification', 'success');
+        renderBattleGrids();
+        ship.cells.forEach(([rr, cc]) => showFlash(gridEl, rr, cc, 'sunk'));
+        if (playerHits >= totalEnemyCells) { endGame(true); return; }
+        setStatus('ПОТОПЛЕН! Драккар врага идёт ко дну!'); return;
+      }
+    }
+    playSound('hit'); haptic('impact', 'medium');
+    renderBattleGrids();
+    showFlash(gridEl, r, c, 'hit');
+    setStatus('Попадание! Продолжай!');
+    return;
+  }
+
+  enemyBoard[r][c] = 'miss';
+  playSound('miss'); haptic('impact', 'light');
+  setStatus('Промах... Ход врага!');
+  myTurn = false; renderBattleGrids();
+  setTimeout(aiMove, 900);
+}
+
+/* ── AI attacks ── */
+function aiMove() {
+  let target = null;
+
+  /* hunt mode: try queued targets */
+  if (aiHuntMode && aiTarget.length > 0) {
+    while (aiTarget.length > 0) {
+      const [r, c] = aiTarget.shift();
+      if (!['hit', 'miss', 'sunk'].includes(playerBoard[r][c])) { target = [r, c]; break; }
+    }
+    if (!target) { aiHuntMode = false; aiHits = []; }
+  }
+
+  if (!target) {
+    const t = randomUntargeted(playerBoard);
+    if (!t) return;   /* ✓ safety guard: board exhausted */
+    target = t;
+  }
+
+  const [r, c] = target;
+  const val = playerBoard[r][c];
+  const gridEl = document.getElementById('player-grid2');
+
+  if (typeof val === 'number' && val > 0) {
+    playerBoard[r][c] = 'hit'; enemyHits++;
+    aiHits.push([r, c]);
+    const ship = playerShips.find(s => s.cells.some(([rr, cc]) => rr === r && cc === c));
+
+    if (ship) {
+      const allHit = ship.cells.every(([rr, cc]) => ['hit', 'sunk'].includes(playerBoard[rr][cc]));
+      if (allHit) {
+        ship.cells.forEach(([rr, cc]) => { playerBoard[rr][cc] = 'sunk'; });
+        ship.sunk = true; markAround(playerBoard, ship.cells);
+        aiHuntMode = false; aiHits = []; aiTarget = [];
+        playSound('sunk'); haptic('notification', 'error');
+
+        /* ✓ BUG FIX: set myTurn=true BEFORE renderBattleGrids so click handlers are added */
+        const gameOver = (enemyHits >= totalPlayerCells);
+        if (!gameOver) myTurn = true;
+        renderBattleGrids();
+        ship.cells.forEach(([rr, cc]) => showFlash(gridEl, rr, cc, 'sunk'));
+
+        if (gameOver) { endGame(false); return; }
+        setStatus('Враг потопил твой корабль! Твой ход!');
+        return;
+      }
+      addAiTargets(r, c);
+    }
+
+    playSound('hit'); haptic('impact', 'heavy');
+    /* ✓ myTurn=true before render so enemy grid gets click handlers */
+    myTurn = true; renderBattleGrids();
+    showFlash(gridEl, r, c, 'hit');
+    setStatus('Враг попал! Твой ход!');
+
+  } else {
+    playerBoard[r][c] = 'miss';
+    playSound('miss');
+    myTurn = true; renderBattleGrids();
+    setStatus('Враг промахнулся! Твой ход!');
+  }
+}
+
+function addAiTargets(r, c) {
+  aiHuntMode = true;
+  if (aiHits.length >= 2) {
+    const sameRow = aiHits[0][0] === aiHits[aiHits.length - 1][0];
+    if (sameRow) {
+      const cols = aiHits.map(h => h[1]), mn = Math.min(...cols), mx = Math.max(...cols);
+      aiTarget = [];
+      if (mx + 1 < 10) aiTarget.push([r, mx + 1]);
+      if (mn - 1 >= 0) aiTarget.push([r, mn - 1]);
+    } else {
+      const rows = aiHits.map(h => h[0]), mn = Math.min(...rows), mx = Math.max(...rows);
+      aiTarget = [];
+      if (mx + 1 < 10) aiTarget.push([mx + 1, c]);
+      if (mn - 1 >= 0) aiTarget.push([mn - 1, c]);
+    }
+  } else {
+    aiTarget = [[r, c + 1], [r, c - 1], [r + 1, c], [r - 1, c]]
+      .filter(([rr, cc]) => rr >= 0 && rr < 10 && cc >= 0 && cc < 10 && !['hit', 'miss', 'sunk'].includes(playerBoard[rr][cc]));
+    aiTarget.sort(() => Math.random() - .5);
+  }
+}
+
+function endGame(playerWon) {
+  myTurn = false;
+  if (playerWon) {
+    setStatus('⚔ ПОБЕДА! Слава Одину! Вражеский флот потоплен!');
+    haptic('notification', 'success');
+    playVictoryFanfare();
+  } else {
+    /* reveal surviving enemy ships */
+    enemyShips.filter(s => !s.sunk).forEach(s => {
+      s.cells.forEach(([r, c]) => { if (typeof enemyBoard[r][c] === 'number') enemyBoard[r][c] = 'reveal'; });
+    });
+    renderEnemyGrid();
+    setStatus('☠ ПОРАЖЕНИЕ! Флот разгромлен. Вальхалла зовёт...');
+    haptic('notification', 'error');
+  }
+}
+
+function resetGame() {
+  gamePhase = 'place'; playerBoard = initBoard(); enemyBoard = initBoard();
+  playerShips = []; enemyShips = []; playerHits = 0; enemyHits = 0;
+  myTurn = true; aiHuntMode = false; aiTarget = []; aiHits = [];
+  document.getElementById('phase-place').style.display = '';
+  document.getElementById('phase-battle').style.display = 'none';
+  buildShipList(); renderPlayerGrid('player-grid');
+  setStatus('Выбери корабль и расставь свой флот');
+}
+
+/* ── Init ── */
+playerBoard = initBoard();
+buildShipList();
+renderPlayerGrid('player-grid');
+</script>
+</body>
+</html>
